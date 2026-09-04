@@ -166,11 +166,12 @@
 			}
 		}
 
+		/* The main note page fills the phone screen; dialogs like /login keep the desktop + frame. */
 		@media (max-width: 640px) {
-			body {
+			body:has(> div > .window.fullscreen) {
 				background: var(--paper);
 			}
-			.window {
+			.window.fullscreen {
 				border: 0;
 				box-shadow: none;
 			}

@@ -216,7 +216,7 @@
 <svelte:window onpaste={onWindowPaste} onkeydown={onWindowKeydown} onfocus={onVisibility} />
 <svelte:document onvisibilitychange={onVisibility} />
 
-<main class="window">
+<main class="window fullscreen">
 	<div class="titlebar">
 		<span class="title">Joy &amp; Curiosity — Notepad</span>
 		<span class="meta">{items.length} {items.length === 1 ? 'note' : 'notes'}</span>
