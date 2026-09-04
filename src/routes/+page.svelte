@@ -1,7 +1,6 @@
 <script lang="ts">
 	import type { PageProps } from './$types';
 	import type { Bucket, Item } from '$lib/types';
-	import { BUCKETS } from '$lib/types';
 	import { cleanUrl, extractUrls } from '$lib/urls';
 	import * as api from '$lib/client/api';
 	import Note from '$lib/components/Note.svelte';
@@ -25,8 +24,10 @@
 	let inflight = 0;
 
 	const SECTION_TITLES: Record<Bucket, string> = { inbox: 'Inbox', intro: 'Intro', later: 'Later' };
+	/** Short lists first so they stay visible; the ever-growing Inbox goes last. */
+	const SECTION_ORDER: readonly Bucket[] = ['later', 'intro', 'inbox'];
 	const sections = $derived(
-		BUCKETS.map((bucket) => ({ bucket, items: items.filter((i) => i.bucket === bucket) })).filter(
+		SECTION_ORDER.map((bucket) => ({ bucket, items: items.filter((i) => i.bucket === bucket) })).filter(
 			(s) => s.bucket === 'inbox' || s.items.length > 0
 		)
 	);
