@@ -52,4 +52,10 @@
 		justify-self: end;
 		min-width: 5rem;
 	}
+
+	@media (max-width: 640px) {
+		input[type='password'] {
+			font-size: 16px;
+		}
+	}
 </style>

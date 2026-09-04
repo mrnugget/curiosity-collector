@@ -402,6 +402,9 @@
 		.page {
 			padding: 0.75rem 0.9rem 4rem;
 		}
+		.capture textarea {
+			font-size: 16px;
+		}
 		.hint {
 			display: none;
 		}

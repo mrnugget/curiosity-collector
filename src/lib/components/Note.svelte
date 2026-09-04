@@ -278,4 +278,10 @@
 			opacity: 1;
 		}
 	}
+
+	@media (max-width: 640px) {
+		.editor {
+			font-size: 16px;
+		}
+	}
 </style>
