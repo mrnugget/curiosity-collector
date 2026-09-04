@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Prepares an Amp orb for this repository: Node toolchain + pnpm dependencies.
+# Must be idempotent and fast on a warm filesystem (a stale snapshot reruns it).
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+step() { printf '\n==> %s (%s)\n' "$1" "$(date +%T)"; }
+
+step "Toolchain"
+node --version
+if ! command -v pnpm >/dev/null 2>&1; then
+	corepack enable
+fi
+pnpm --version
+
+step "Dependencies"
+pnpm install --frozen-lockfile --prefer-offline
+
+step "SvelteKit types"
+pnpm exec svelte-kit sync
+
+step "Done"
