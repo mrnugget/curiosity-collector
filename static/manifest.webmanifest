@@ -1,0 +1,27 @@
+{
+	"name": "Joy & Curiosity",
+	"short_name": "Curiosity",
+	"description": "Collect links and thoughts for the Joy & Curiosity newsletter.",
+	"id": "/",
+	"start_url": "/",
+	"scope": "/",
+	"display": "standalone",
+	"orientation": "any",
+	"background_color": "#fdfcf7",
+	"theme_color": "#3a6ea5",
+	"icons": [
+		{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+		{ "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+		{ "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+	],
+	"share_target": {
+		"action": "/share",
+		"method": "POST",
+		"enctype": "application/x-www-form-urlencoded",
+		"params": {
+			"title": "title",
+			"text": "text",
+			"url": "url"
+		}
+	}
+}
