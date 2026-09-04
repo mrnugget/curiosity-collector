@@ -25,6 +25,12 @@
 	const segments = $derived(segmentText(item.body));
 	const otherBuckets = $derived(BUCKETS.filter((b) => b !== item.bucket));
 
+	const MOVE_HINTS: Record<Bucket, string> = {
+		inbox: 'Move back to Inbox: links and thoughts for this week’s issue',
+		intro: 'Move to Intro: ideas for the opening of the newsletter',
+		later: 'Move to Later: keep for a future issue, out of the way for now'
+	};
+
 	async function copy(key: string, text: string) {
 		if (!(await copyText(text))) return;
 		copied = key;
@@ -147,15 +153,25 @@
 		<time class="when" datetime={item.createdAt} title={new Date(item.createdAt).toLocaleString()}
 			>{timeAgo(item.createdAt)}</time
 		>
-		<button class="quiet" onclick={() => copy('body', item.body)}>{label('body', 'copy text')}</button>
+		<button class="quiet" title="Copy the note text" onclick={() => copy('body', item.body)}
+			>{label('body', 'copy text')}</button
+		>
 		{#if archived}
-			<button class="quiet" onclick={() => onpatch({ done: false })}>restore</button>
-			<button class="quiet danger" onclick={ondelete}>delete</button>
+			<button class="quiet" title="Put this note back where it was" onclick={() => onpatch({ done: false })}
+				>restore</button
+			>
+			<button class="quiet danger" title="Delete this note for good" onclick={ondelete}>delete</button>
 		{:else}
 			{#each otherBuckets as bucket (bucket)}
-				<button class="quiet" onclick={() => onpatch({ bucket })}>→ {bucket}</button>
+				<button class="quiet" title={MOVE_HINTS[bucket]} onclick={() => onpatch({ bucket })}
+					>→ {bucket}</button
+				>
 			{/each}
-			<button class="quiet done" onclick={() => onpatch({ done: true })}>✓ done</button>
+			<button
+				class="quiet done"
+				title="Mark as used in the newsletter and move it to Done"
+				onclick={() => onpatch({ done: true })}>✓ done</button
+			>
 		{/if}
 	</div>
 </article>
