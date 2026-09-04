@@ -1,0 +1,10 @@
+# Production deployment on an Amp obelisk (`amp apps obelisk-deploy amp/curiosity-collector`).
+# The obelisk is one long-lived sandbox with this repo checked out at /home/user/workspace/app;
+# the SQLite database below lives outside the checkout and survives deploys.
+build: pnpm install --frozen-lockfile && pnpm build
+services:
+  web:
+    # Runs via `bash -lc`, so we can derive SvelteKit's ORIGIN from AMP_DEPLOYMENT_URL (which has a trailing slash).
+    command: ORIGIN="${AMP_DEPLOYMENT_URL%/}" node build
+    env:
+      DATABASE_PATH: /home/user/data/collector.db

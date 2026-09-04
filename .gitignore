@@ -25,6 +25,7 @@ vite.config.ts.timestamp-*
 # Data
 /data
 
-# Amp orb state (keep services.yaml)
+# Amp orb state (keep the tracked config files)
 .amp/*
 !.amp/services.yaml
+!.amp/obelisk.yaml
