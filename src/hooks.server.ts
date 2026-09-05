@@ -38,6 +38,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 		pathname.startsWith('/_app/') ||
 		pathname === '/favicon.svg' ||
 		pathname === '/robots.txt' ||
+		// Jellyware requires its own OAuth session; notes permissions are not launch permissions.
+		pathname === '/api/jellyware' ||
 		// /share does its own auth so Shortcuts can call it with a bearer token.
 		pathname === '/share';
 
