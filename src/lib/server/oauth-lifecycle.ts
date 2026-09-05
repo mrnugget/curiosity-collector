@@ -1,5 +1,5 @@
 import { request as httpsRequest } from 'node:https';
-import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { createPublicKey, randomBytes, timingSafeEqual, verify, type JsonWebKeyInput } from 'node:crypto';
 import { buildAuthorizationURL, createOAuthTransaction, exchangeAuthorizationCode } from './oauth.ts';
 
 // Temporary owner-coordinated diagnostic. Remove after the lifecycle test.
@@ -12,11 +12,13 @@ const TTL = 60 * 60 * 1000;
 const RESPONSE_LIMIT = 64 * 1024;
 
 type Claims = Record<string, unknown>;
-type Token = { accessToken: string; expiresAt: number | null; claims: Claims | null; sid: string | null };
-type Probe = { status: number | null; active: boolean | null; expired: boolean | null; checks?: Record<string, boolean> | null };
+type AccessValidation = { result: 'valid' | 'invalid' | 'unavailable'; signatureValid: boolean | null; checks: Record<string, boolean> | null };
+type Token = { accessToken: string; expiresAt: number | null; claims: Claims | null; sid: string | null; validation: AccessValidation };
+type Probe = { status: number | null; active: boolean | null; expired: boolean | null; requestID: string | null; checks?: Record<string, boolean> | null };
 type Session = {
 	expiresAt: number; ownerVerified: boolean; busy: boolean;
 	a?: Token; b?: Token; before?: Probe; after?: Probe;
+	beforeWithoutHint?: Probe; afterWithoutHint?: Probe;
 	final?: { a: Probe; b: Probe; expected: boolean; strictFieldChecksPassed: boolean };
 	error?: 'invalid_state' | 'owner_mismatch' | 'sign_in_failed' | null;
 	transaction?: ReturnType<typeof createOAuthTransaction> & { slot: 'a' | 'b' };
@@ -51,7 +53,9 @@ export const providerFetch: typeof fetch = (input, init = {}) => {
 			res.on('error', () => reject(new Error('provider_transport_failed')));
 			res.on('end', () => {
 				const bytes = Buffer.concat(chunks);
-				resolve(new Response(res.statusCode === 204 ? null : bytes, { status: res.statusCode }));
+				const requestID = safeRequestID(res.headers['x-request-id']);
+				resolve(new Response(res.statusCode === 204 ? null : bytes, { status: res.statusCode,
+					headers: requestID ? { 'x-request-id': requestID } : {} }));
 			});
 		});
 		req.on('error', () => reject(new Error('provider_transport_failed')));
@@ -72,6 +76,56 @@ function diagnosticClaims(accessToken: string): Claims | null {
 		const claims = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
 		return claims && typeof claims === 'object' ? claims : null;
 	} catch { return null; }
+}
+
+export function safeRequestID(value: unknown): string | null {
+	return typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value) ? value : null;
+}
+
+// Independent access-token verification, NOT the ID-token nonce/audience validator.
+// The only key source is the fixed trusted issuer's JWKS, never jku/x5u from a token.
+export async function verifyAccessToken(token: string, clientID: string, ownerID: string, fetchFn: typeof fetch = providerFetch, now = Date.now()): Promise<AccessValidation> {
+	const invalid: AccessValidation = { result: 'invalid', signatureValid: false, checks: null };
+	const unavailable: AccessValidation = { result: 'unavailable', signatureValid: null, checks: null };
+	const parts = token.split('.');
+	if (token.length > RESPONSE_LIMIT || parts.length !== 3 || parts.some((p) => !/^[A-Za-z0-9_-]+$/.test(p) || Buffer.from(p, 'base64url').toString('base64url') !== p)) return invalid;
+	let header: Claims;
+	let claims: Claims;
+	try {
+		header = JSON.parse(Buffer.from(parts[0], 'base64url').toString());
+		claims = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
+		if (!header || typeof header !== 'object' || Array.isArray(header) || header.alg !== 'RS256' || typeof header.kid !== 'string' ||
+			header.crit !== undefined || !claims || typeof claims !== 'object' || Array.isArray(claims)) return invalid;
+	} catch { return invalid; }
+	let keys: unknown[];
+	try {
+		const response = await fetchFn(`${ISSUER}/oauth2/jwks`, { headers: { Accept: 'application/json' } });
+		const payload = await response.json();
+		if (!response.ok || !Array.isArray(payload?.keys)) return unavailable;
+		keys = payload.keys;
+	} catch { return unavailable; }
+	const key = keys.find((value): value is Claims => {
+		if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+		const candidate = value as Claims;
+		return candidate.kid === header.kid && candidate.kty === 'RSA' &&
+			(candidate.use === undefined || candidate.use === 'sig') && (candidate.alg === undefined || candidate.alg === 'RS256') &&
+			typeof candidate.n === 'string' && typeof candidate.e === 'string';
+	});
+	if (!key) return invalid;
+	try {
+		if (!verify('RSA-SHA256', Buffer.from(`${parts[0]}.${parts[1]}`, 'ascii'),
+			createPublicKey({ key: key as JsonWebKeyInput['key'], format: 'jwk' }), Buffer.from(parts[2], 'base64url'))) return invalid;
+	} catch { return invalid; }
+	const seconds = Math.floor(now / 1000);
+	const checks = {
+		issuerMatches: claims.iss === ISSUER,
+		audienceMatchesResource: claims.aud === 'https://ampcode.com/api/v2',
+		clientMatches: claims.client_id === clientID,
+		subjectMatchesOwner: claims.sub === ownerID,
+		expUnexpired: typeof claims.exp === 'number' && Number.isFinite(claims.exp) && claims.exp > seconds,
+		nbfAbsentOrValid: claims.nbf === undefined || (typeof claims.nbf === 'number' && Number.isFinite(claims.nbf) && claims.nbf <= seconds)
+	};
+	return { result: Object.values(checks).every(Boolean) ? 'valid' : 'invalid', signatureValid: true, checks };
 }
 
 export function introspectionChecks(payload: Claims | null, claims: Claims | null, clientID: string, ownerID: string, now: number) {
@@ -130,8 +184,12 @@ export function createHarness({ origin, clientID, clientSecret, ownerID = OWNER,
 		return {
 			ownerVerified: session.ownerVerified,
 			tokenAReceived: !!session.a, tokenBReceived: !!session.b,
+			accessTokenValidationA: session.a?.validation ?? null,
+			accessTokenValidationB: session.b?.validation ?? null,
 			beforeRevocation: session.before ?? null,
+			beforeRevocationWithoutHint: session.beforeWithoutHint ?? null,
 			afterRevocation: session.after ?? null,
+			afterRevocationWithoutHint: session.afterWithoutHint ?? null,
 			afterReconsent: session.final ?? null,
 			sidAvailableA: session.a ? session.a.sid !== null : null,
 			sidAvailableB: session.b ? session.b.sid !== null : null,
@@ -140,31 +198,36 @@ export function createHarness({ origin, clientID, clientSecret, ownerID = OWNER,
 		};
 	}
 	function page(session: Session, setCookie?: string) {
-		// evidence contains only fixed labels, booleans, status numbers and nulls.
+		// Only fixed labels/categories, booleans, status numbers, safe request IDs and nulls.
 		const html = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Curiosity OAuth lifecycle test</title>
 <style>body{font:16px system-ui;max-width:48rem;margin:2rem auto;padding:0 1rem}button{font:inherit;padding:.6rem;margin:.3rem 0}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#eee;padding:1rem}form{display:inline-block;margin-right:1rem}</style>
 <h1>Curiosity OAuth lifecycle test</h1><p>Owner only. This harness never revokes consent, changes notes, or launches agents. Tokens stay in server memory for at most one hour.</p>
+<p>For this diagnostic update: sign in for a fresh token A, then pause. Do not revoke. Deployments clear previous tokens. Probe labels do not prove revocation; JWT validity does not prove current consent.</p>
 <ol><li>Sign in for token A and verify active.</li><li>Coordinate revocation with the agent before revoking Curiosity in Amp. Then check token A.</li><li>Only after token A is inactive and unexpired, sign in again for token B.</li></ol>
 <form method="POST" action="${BASE_PATH}/signin-a"><button ${session.a ? 'disabled' : ''}>1. Sign in for token A</button></form>
 <form method="POST" action="${BASE_PATH}/check-a"><button ${session.a && !session.b ? '' : 'disabled'}>2. Check token A after revocation</button></form>
-<form method="POST" action="${BASE_PATH}/signin-b"><button ${session.after?.active === false && session.after?.expired === false && !session.b ? '' : 'disabled'}>3. Reconsent for token B</button></form>
+<form method="POST" action="${BASE_PATH}/signin-b"><button ${session.before?.active === true && session.after?.active === false && session.after?.expired === false && !session.b ? '' : 'disabled'}>3. Reconsent for token B</button></form>
 <form method="POST" action="${BASE_PATH}/check-both"><button ${session.b ? '' : 'disabled'}>Recheck A and B</button></form>
 <form method="POST" action="${BASE_PATH}/reset"><button>Forget test tokens</button></form>
 <h2>Safe evidence</h2><pre>${JSON.stringify(evidence(session), null, 2)}</pre>
 <p>sid equality is diagnostic only; it is not proof of current consent. Restart or Forget clears this browser's test. Expired access tokens cannot prove revocation.</p></html>`;
 		return new Response(html, { headers: headers({ 'content-type': 'text/html; charset=utf-8', ...(setCookie ? { 'set-cookie': setCookie } : {}) }) });
 	}
-	async function introspect(token: Token): Promise<Probe> {
+	async function introspect(token: Token, withHint = true): Promise<Probe> {
+		let requestID: string | null = null;
 		try {
+			const body = new URLSearchParams({ client_id: clientID, client_secret: clientSecret, token: token.accessToken });
+			if (withHint) body.set('token_type_hint', 'access_token');
 			const result = await fetchFn(`${ISSUER}/oauth2/introspection`, {
 				method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
-				body: new URLSearchParams({ client_id: clientID, client_secret: clientSecret, token: token.accessToken, token_type_hint: 'access_token' })
+				body
 			});
+			requestID = safeRequestID(result.headers.get('x-request-id'));
 			const payload = await result.json().catch(() => null);
-			return { status: result.status, active: result.status === 200 && typeof payload?.active === 'boolean' ? payload.active : null,
+			return { status: result.status, requestID, active: result.status === 200 && typeof payload?.active === 'boolean' ? payload.active : null,
 				checks: result.status === 200 && payload?.active === true ? introspectionChecks(payload, token.claims, clientID, ownerID, now()) : null,
 				expired: token.expiresAt === null ? null : token.expiresAt <= now() };
-		} catch { return { status: null, active: null, expired: token.expiresAt === null ? null : token.expiresAt <= now() }; }
+		} catch { return { status: null, requestID, active: null, expired: token.expiresAt === null ? null : token.expiresAt <= now() }; }
 	}
 	async function checkBoth(session: Session) {
 		if (!session.a || !session.b) return;
@@ -203,13 +266,14 @@ export function createHarness({ origin, clientID, clientSecret, ownerID = OWNER,
 				const result = await exchangeAuthorizationCode(config, url.searchParams.get('code')!, transaction.codeVerifier, transaction.nonce, fetchFn, now());
 				if (result.identity.sub !== ownerID) { session.error = 'owner_mismatch'; return redirect('/'); }
 				const claims = diagnosticClaims(result.tokens.accessToken);
-				const token = { accessToken: result.tokens.accessToken, expiresAt: result.tokens.expiresAt, claims, sid: typeof claims?.sid === 'string' && claims.sid ? claims.sid : null };
+				const validation = await verifyAccessToken(result.tokens.accessToken, clientID, ownerID, fetchFn, now());
+				const token = { accessToken: result.tokens.accessToken, expiresAt: result.tokens.expiresAt, claims, validation, sid: typeof claims?.sid === 'string' && claims.sid ? claims.sid : null };
 				// Refresh/ID tokens are not retained. No refresh: preserve the original tokens for the comparison.
 				session.ownerVerified = true;
 				session.error = null;
 				if (transaction.slot === 'a') {
 					session.a = token;
-					session.before = await introspect(token);
+					[session.before, session.beforeWithoutHint] = await Promise.all([introspect(token), introspect(token, false)]);
 				} else {
 					session.b = token;
 					await checkBoth(session);
@@ -237,7 +301,9 @@ export function createHarness({ origin, clientID, clientSecret, ownerID = OWNER,
 		if (!session.ownerVerified) return plain('Owner sign-in required.', 403);
 		session.busy = true;
 		try {
-			if (url.pathname === '/check-a' && session.a && !session.b) session.after = await introspect(session.a);
+			if (url.pathname === '/check-a' && session.a && !session.b) {
+				[session.after, session.afterWithoutHint] = await Promise.all([introspect(session.a), introspect(session.a, false)]);
+			}
 			else if (url.pathname === '/check-both' && session.a && session.b) await checkBoth(session);
 			else return plain('Complete the preceding test step first.', 409);
 		} finally { session.busy = false; }
