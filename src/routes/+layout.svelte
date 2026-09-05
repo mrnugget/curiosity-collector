@@ -1,5 +1,24 @@
 <script lang="ts">
-	let { children } = $props();
+	import type { LayoutProps } from './$types';
+	let { children, data }: LayoutProps = $props();
+
+	$effect(() => {
+		if (!data.widget) return;
+		let disposed = false;
+		const script = document.createElement('script');
+		script.src = data.widget.scriptURL;
+		script.dataset.jellywareApp = data.widget.appID;
+		script.async = true;
+		script.onload = () => {
+			if (disposed) window.__ampJellyware?.setEnabled(false);
+		};
+		document.head.append(script);
+		return () => {
+			disposed = true;
+			window.__ampJellyware?.setEnabled(false);
+			script.remove();
+		};
+	});
 </script>
 
 <svelte:head>

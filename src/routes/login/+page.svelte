@@ -1,61 +1,38 @@
 <script lang="ts">
 	import type { PageProps } from './$types';
-
-	let { data, form }: PageProps = $props();
+	let { data }: PageProps = $props();
 </script>
 
-<svelte:head>
-	<title>Log in — Joy & Curiosity</title>
-</svelte:head>
+<svelte:head><title>Sign in — Joy & Curiosity</title></svelte:head>
 
 <div class="window login">
-	<div class="titlebar"><span class="title">Log in</span></div>
-	<form method="POST" class="body">
-		<input type="hidden" name="next" value={form?.next ?? data.next} />
-		<label for="password">Password</label>
-		<!-- svelte-ignore a11y_autofocus -->
-		<input id="password" name="password" type="password" autocomplete="current-password" autofocus required />
-		{#if form?.wrong}
-			<p class="error">That's not it.</p>
+	<div class="titlebar"><span class="title">Joy & Curiosity</span></div>
+	<div class="body">
+		{#if data.user}
+			<p>Signed in as {data.user.displayName}.</p>
+			{#if data.allowed}
+				<a href={data.next}>Open collector</a>
+			{:else}
+				<p class="error">This account is not allowed to access this collector.</p>
+				<p>Amp user ID: <code>{data.user.id}</code></p>
+			{/if}
+			<form method="POST" action="/auth/signout"><button class="btn">Sign out</button></form>
+		{:else}
+			<p>Sign in with your Amp account to open your collector.</p>
+			{#if data.failed}<p class="error">Sign-in failed. Please try again.</p>{/if}
+			{#if data.configured}
+				<a class="btn" href={`/auth/signin?returnTo=${encodeURIComponent(data.next)}`}>Sign in with Amp</a>
+			{:else}
+				<p class="error">Amp sign-in is not configured. Ask the app administrator to finish setup.</p>
+			{/if}
 		{/if}
-		<button type="submit" class="btn">OK</button>
-	</form>
+	</div>
 </div>
 
 <style>
-	.login {
-		width: min(20rem, calc(100vw - 2rem));
-		margin: 20vh auto 0;
-	}
-	.body {
-		display: grid;
-		gap: 0.5rem;
-		padding: 1rem;
-	}
-	label {
-		font-size: 0.8rem;
-		color: var(--muted);
-	}
-	input[type='password'] {
-		font: inherit;
-		padding: 0.4rem 0.5rem;
-		border: 1px solid var(--rule);
-		background: var(--paper);
-		color: var(--ink);
-	}
-	.error {
-		margin: 0;
-		font-size: 0.8rem;
-		color: var(--danger);
-	}
-	.btn {
-		justify-self: end;
-		min-width: 5rem;
-	}
-
-	@media (max-width: 640px) {
-		input[type='password'] {
-			font-size: 16px;
-		}
-	}
+	.login { width: min(24rem, calc(100vw - 2rem)); margin: 20vh auto 0; }
+	.body { display: grid; gap: 1rem; padding: 1rem; }
+	p { margin: 0; }
+	.error { color: var(--danger); }
+	.btn { justify-self: start; }
 </style>

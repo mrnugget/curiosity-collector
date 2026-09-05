@@ -8,8 +8,8 @@ import { build, files, version } from '$service-worker';
 /**
  * Minimal service worker: makes the app installable (and therefore a share
  * target) and serves the immutable build assets from cache. Pages and API
- * calls always go to the network so data is never stale; if the network is
- * down, the last cached page shell is shown instead of a browser error.
+ * calls always go to the network. Private pages must not survive sign-out
+ * in the service worker's cache.
  */
 
 const sw = self as unknown as ServiceWorkerGlobalScope;
@@ -45,17 +45,4 @@ sw.addEventListener('fetch', (event) => {
 		return;
 	}
 
-	if (request.mode === 'navigate') {
-		event.respondWith(
-			fetch(request)
-				.then((res) => {
-					if (res.ok && url.pathname === '/') {
-						const copy = res.clone();
-						caches.open(CACHE).then((cache) => cache.put('/', copy));
-					}
-					return res;
-				})
-				.catch(async () => (await caches.match('/')) ?? Response.error())
-		);
-	}
 });

@@ -1,5 +1,6 @@
 import { error, redirect, type RequestHandler } from '@sveltejs/kit';
-import { isAuthenticated, isBearerAuthenticated } from '$lib/server/auth';
+import { canAccessCollector, isBearerAuthenticated } from '$lib/server/auth';
+import { LOCAL_AUTH_DISABLED } from '$lib/server/config';
 import { createItem } from '$lib/server/db';
 import { fetchInBackground } from '$lib/server/metadata';
 import { composeBody, type Shared } from '$lib/server/share';
@@ -28,7 +29,8 @@ function handleShared(shared: Shared, wantsJson: boolean): Response {
 }
 
 function authorize(event: Parameters<RequestHandler>[0]): void {
-	if (isAuthenticated(event.cookies) || isBearerAuthenticated(event.request, event.url)) return;
+	if (LOCAL_AUTH_DISABLED || canAccessCollector(event.locals.user) || isBearerAuthenticated(event.request)) return;
+	if (event.locals.user) error(403, 'forbidden');
 	if (event.request.method === 'GET' && !event.url.searchParams.has('key')) {
 		redirect(303, `/login?next=${encodeURIComponent(event.url.pathname + event.url.search)}`);
 	}

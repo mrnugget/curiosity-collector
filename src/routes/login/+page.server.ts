@@ -1,24 +1,17 @@
-import { fail, redirect } from '@sveltejs/kit';
-import type { Actions, PageServerLoad } from './$types';
-import { authEnabled, isAuthenticated, isPasswordValid, setSessionCookie } from '$lib/server/auth';
+import { redirect } from '@sveltejs/kit';
+import type { PageServerLoad } from './$types';
+import { canAccessCollector } from '$lib/server/auth';
+import { LOCAL_AUTH_DISABLED, oauthConfigurationError } from '$lib/server/config';
+import { normalizeReturnTo } from '$lib/server/oauth';
 
-function safeNext(raw: string | null): string {
-	// Only allow same-origin relative paths.
-	return raw && raw.startsWith('/') && !raw.startsWith('//') ? raw : '/';
-}
-
-export const load: PageServerLoad = ({ cookies, url }) => {
-	if (!authEnabled() || isAuthenticated(cookies)) redirect(303, safeNext(url.searchParams.get('next')));
-	return { next: safeNext(url.searchParams.get('next')) };
-};
-
-export const actions: Actions = {
-	default: async ({ request, cookies }) => {
-		const form = await request.formData();
-		const password = String(form.get('password') ?? '');
-		const next = safeNext(String(form.get('next') ?? '/'));
-		if (!isPasswordValid(password)) return fail(401, { wrong: true, next });
-		setSessionCookie(cookies);
-		redirect(303, next);
-	}
+export const load: PageServerLoad = ({ locals, url }) => {
+	const next = normalizeReturnTo(url.searchParams.get('next'), '/');
+	if (LOCAL_AUTH_DISABLED) redirect(303, next);
+	return {
+		next,
+		user: locals.user,
+		allowed: canAccessCollector(locals.user),
+		configured: oauthConfigurationError() === null,
+		failed: url.searchParams.has('auth_error')
+	};
 };
