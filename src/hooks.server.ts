@@ -15,6 +15,11 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const { pathname } = event.url;
 	event.locals.user = null;
 	event.locals.accessToken = null;
+	// Temporary diagnostic has its own owner-verified OAuth session. Do not refresh
+	// the app session while testing revocation; never bypass notes/share auth.
+	if (pathname === '/__oauth-lifecycle' || pathname.startsWith('/__oauth-lifecycle/')) {
+		return resolve(event);
+	}
 	try {
 		const session = await authenticateSession(event.cookies.get(AUTH_COOKIE));
 		if (session) {
