@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { generateKeyPairSync, sign } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { runInNewContext } from 'node:vm';
 import { Server } from '../.svelte-kit/output/server/index.js';
 import { manifest } from '../.svelte-kit/output/server/manifest.js';
 import { sealPayload, unsealPayload } from '../src/lib/server/oauth.ts';
@@ -139,6 +141,39 @@ test('widget capability is checked server-side without leaking OAuth token', asy
 	assert.match(html, /https:\/\/ampcode.com\/jellyware\/widget.js/);
 	assert.match(html, /app_test/);
 	assert.doesNotMatch(html, /test-token|test-client-secret|accessToken/);
+});
+
+test('restored widget loader uses separate-page mode without app proxy calls', () => {
+	const source = readFileSync(new URL('../src/routes/+layout.svelte', import.meta.url), 'utf8');
+	const effect = source.slice(source.indexOf('$effect('), source.indexOf('</script>'));
+	let cleanup;
+	let appended;
+	let removed = false;
+	const enabled = [];
+	runInNewContext(effect, {
+		data: { widget: { scriptURL: 'https://ampcode.com/jellyware/widget.js', appID: 'app_test' } },
+		$effect: (callback) => { cleanup = callback(); },
+		document: {
+			createElement: (tag) => { assert.equal(tag, 'script'); return { dataset: {}, remove: () => { removed = true; } }; },
+			head: { append: (script) => { appended = script; } }
+		},
+		window: { __ampJellyware: { setEnabled: (value) => enabled.push(value) } },
+		fetch: () => { assert.fail('Separate-page loader must not call the app proxy'); }
+	});
+	assert.equal(appended.src, 'https://ampcode.com/jellyware/widget.js');
+	assert.equal(appended.dataset.jellywareApp, 'app_test');
+	assert.equal(appended.dataset.jellywareInline, undefined);
+	assert.equal(appended.async, true);
+	cleanup();
+	appended.onload();
+	assert.equal(removed, true);
+	assert.deepEqual(enabled, [false, false]);
+});
+
+test('temporary diagnostic and inline proxy routes are removed', async () => {
+	const headers = { cookie: sessionCookie() };
+	assert.equal((await request('/__oauth-lifecycle', { headers })).status, 404);
+	assert.equal((await request('/api/jellyware', { headers })).status, 404);
 });
 
 test('denied, unavailable and malformed widget capability never break notes', async (t) => {

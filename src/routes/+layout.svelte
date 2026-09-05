@@ -8,7 +8,6 @@
 		const script = document.createElement('script');
 		script.src = data.widget.scriptURL;
 		script.dataset.jellywareApp = data.widget.appID;
-		script.dataset.jellywareInline = 'true';
 		script.async = true;
 		script.onload = () => {
 			if (disposed) window.__ampJellyware?.setEnabled(false);

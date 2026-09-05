@@ -97,19 +97,8 @@ must come from the platform's authorized widget contract.
 The root server layout calls `GET https://ampcode.com/api/jellyware/context?app=amp/curiosity-collector`
 with the server-only OAuth access token. Only an authorized `{widget: {scriptURL,
 appID}}` response enables the browser's async platform script; null, errors and
-timeouts hide it. Tokens never enter page data. The loader opts into inline mode
-with `data-jellyware-inline="true"`. The widget uses same-origin `/api/jellyware`:
-GET discovers destination availability/grants, and POST either requests an Amp-owned
-authorization URL or sends comments after the explicit per-app/per-destination grant.
-Sign-in alone does not authorize execution; Amp checks launch rights on every request.
-
-The app proxy always targets `https://ampcode.com/api/jellyware/launch?app=amp/curiosity-collector`
-using the refreshed session token server-side. Notes/share credentials do not grant
-access. POST requires the exact configured callback origin, JSON, and at most
-200,000 body bytes, including streamed bodies. Only the documented command/comment
-fields are forwarded; response fields and Amp URLs are validated, errors sanitized,
-redirects refused, and grant state never cached. Upstream timeouts are 30 seconds
-for discovery/authorization and 60 seconds for send.
+timeouts hide it. Tokens never enter page data. Sending a DOM comment opens an
+Amp-owned confirmation page: sign-in alone does not authorize agent execution.
 
 The obelisk builds via `.amp/obelisk.yaml`, runs `node build` with
 `ORIGIN=$AMP_DEPLOYMENT_URL`, and stores SQLite at `/home/user/data/collector.db`,
