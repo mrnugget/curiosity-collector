@@ -288,7 +288,7 @@
 <style>
 	main {
 		width: min(44rem, 100%);
-		margin: 3vh auto 6vh;
+		margin: 5vh auto 6vh;
 	}
 	.page {
 		padding: 0.75rem 1.25rem 1.5rem;
