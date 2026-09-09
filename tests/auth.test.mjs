@@ -30,6 +30,7 @@ function sessionCookie(id = 'user_owner', expiresAt = Date.now() + 60_000) {
 
 test('production rejects anonymous notes/API/share and untrusted proxy identity', async () => {
 	assert.equal((await request('/')).status, 303);
+	assert.doesNotMatch(await (await request('/login')).text(), /jellyware\/widget\.js|data-jellyware-app|data-jellyware-inline/);
 	assert.equal((await request('/api/items')).status, 401);
 	assert.equal((await request('/api/items', { headers: { 'X-Amp-Authenticated': 'amp-user=yes, workspace-member=yes', 'X-Amp-User-ID': 'user_owner' } })).status, 401);
 	assert.equal((await request('/share', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"text":"blocked"}' })).status, 401);
@@ -143,7 +144,7 @@ test('widget capability is checked server-side without leaking OAuth token', asy
 	assert.doesNotMatch(html, /test-token|test-client-secret|accessToken/);
 });
 
-test('restored widget loader uses separate-page mode without app proxy calls', () => {
+test('widget loader enables inline confirmation without app proxy calls', () => {
 	const source = readFileSync(new URL('../src/routes/+layout.svelte', import.meta.url), 'utf8');
 	const effect = source.slice(source.indexOf('$effect('), source.indexOf('</script>'));
 	let cleanup;
@@ -162,7 +163,7 @@ test('restored widget loader uses separate-page mode without app proxy calls', (
 	});
 	assert.equal(appended.src, 'https://ampcode.com/jellyware/widget.js');
 	assert.equal(appended.dataset.jellywareApp, 'app_test');
-	assert.equal(appended.dataset.jellywareInline, undefined);
+	assert.equal(appended.dataset.jellywareInline, 'true');
 	assert.equal(appended.async, true);
 	cleanup();
 	appended.onload();
