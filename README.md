@@ -100,7 +100,7 @@ appID}}` response enables the browser's async platform script; null, errors and
 timeouts hide it. Tokens never enter page data. Sending a DOM comment opens an
 Amp-owned confirmation page: sign-in alone does not authorize agent execution.
 
-The obelisk builds via `.amp/obelisk.yaml`, runs `node build` with
+The perma-orb builds via `.amp/perma-orb.yaml`, runs `node build` with
 `ORIGIN=$AMP_DEPLOYMENT_URL`, and stores SQLite at `/home/user/data/collector.db`,
 outside `/home/user/workspace/app`, so redeploying the checkout preserves data.
 This is not a backup policy; the application has no independent backup/replication.
