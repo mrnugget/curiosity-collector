@@ -29,3 +29,4 @@ vite.config.ts.timestamp-*
 .amp/*
 !.amp/services.yaml
 !.amp/perma-orb.yaml
+!.amp/perma-orb-deploy.json

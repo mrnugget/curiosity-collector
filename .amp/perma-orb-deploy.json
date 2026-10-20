@@ -1,0 +1,9 @@
+{
+  "targets": {
+    "default": {
+      "app": "amp/curiosity-collector",
+      "on": "mrnugget/curiosity-collector",
+      "branch": "main"
+    }
+  }
+}
