@@ -4,6 +4,11 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# Node rejects these CA modes together; prefer the system store if both are inherited.
+if [[ " ${NODE_OPTIONS:-} " == *" --use-system-ca "* && " ${NODE_OPTIONS:-} " == *" --use-openssl-ca "* ]]; then
+	export NODE_OPTIONS="${NODE_OPTIONS//--use-openssl-ca/}"
+fi
+
 step() { printf '\n==> %s (%s)\n' "$1" "$(date +%T)"; }
 
 step "Toolchain"
