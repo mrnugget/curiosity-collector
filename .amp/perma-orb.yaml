@@ -1,12 +1,8 @@
-# Production deployment on an Amp perma-orb (`amp apps perma-orb-deploy amp/curiosity-collector`).
-# The perma-orb is one long-lived sandbox with this repo checked out at /home/user/workspace/app;
-# the SQLite database below lives outside the checkout and survives deploys.
+# SQLite lives in the deployment's persistent data directory, outside the checkout.
 build: pnpm install --frozen-lockfile && pnpm build
 services:
   web:
     # SvelteKit needs ORIGIN for form posts; adapter-node normalizes it to url.origin, so the
     # trailing slash on AMP_DEPLOYMENT_URL is fine. (systemd expands $VAR/${VAR} in ExecStart
     # itself, so bash-only syntax like ${VAR%/} would come out empty.)
-    command: ORIGIN=$AMP_DEPLOYMENT_URL node build
-    env:
-      DATABASE_PATH: /home/user/data/collector.db
+    command: ORIGIN=$AMP_DEPLOYMENT_URL DATABASE_PATH=$AMP_DEPLOYMENT_DATA_DIRECTORY/collector.db HOST=0.0.0.0 node build
