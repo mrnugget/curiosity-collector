@@ -6,3 +6,7 @@ services:
     # trailing slash on AMP_DEPLOYMENT_URL is fine. (systemd expands $VAR/${VAR} in ExecStart
     # itself, so bash-only syntax like ${VAR%/} would come out empty.)
     command: ORIGIN=$AMP_DEPLOYMENT_URL DATABASE_PATH=$AMP_DEPLOYMENT_DATA_DIRECTORY/collector.db HOST=0.0.0.0 node build
+    env:
+      # The Box and deployment this app runs on. Used only for the Jellyware review widget.
+      AMP_BOX: mrnugget/kiste
+      AMP_BOX_DEPLOYMENT: curiosity-collector

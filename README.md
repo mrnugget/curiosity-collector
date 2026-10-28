@@ -91,12 +91,11 @@ cached, and the service worker no longer stores private HTML for offline use.
 
 Amp identity is not app ownership. Deployed apps do not receive the documented
 thread-portal identity headers. Notes allowlists grant no Jellyware widget rights;
-app creator/workspace-admin orb permission and runner-owner production permission
-must come from the platform's authorized widget contract.
+Amp shows the widget only to users with access to the Box.
 
-The root server layout calls `GET https://ampcode.com/api/jellyware/context?app=amp/curiosity-collector`
-with the server-only OAuth access token. Only an authorized `{widget: {scriptURL,
-appID}}` response enables the browser's async platform script; null, errors and
+The root server layout calls `GET https://ampcode.com/api/jellyware/context?box=$AMP_BOX&deployment=$AMP_BOX_DEPLOYMENT`
+(both set in `.amp/box.yaml`) with the server-only OAuth access token. Only an authorized
+`{widget: {scriptURL, machineID}}` response enables the browser's async platform script; null, errors and
 timeouts hide it. Tokens never enter page data. Sending a DOM comment opens an
 Amp-owned confirmation page: sign-in alone does not authorize agent execution.
 

@@ -16,7 +16,8 @@ await server.init({ env: {
 	AMP_OAUTH_CLIENT_ID: 'test-client', AMP_OAUTH_CLIENT_SECRET: 'test-client-secret',
 	AMP_OAUTH_REDIRECT_URI: `${origin}/auth/callback`, COLLECTOR_SESSION_SECRET: secret,
 	COLLECTOR_SHARE_TOKEN: 'test-share-token', COLLECTOR_PASSWORD: 'legacy-password',
-	COLLECTOR_ALLOWED_USER_IDS: 'user_owner,user_01K9KJJDPFGCG05B1WFFETGX8E'
+	COLLECTOR_ALLOWED_USER_IDS: 'user_owner,user_01K9KJJDPFGCG05B1WFFETGX8E',
+	AMP_BOX: 'mrnugget/kiste', AMP_BOX_DEPLOYMENT: 'curiosity-collector'
 } });
 
 function request(path, options = {}) {
@@ -30,7 +31,7 @@ function sessionCookie(id = 'user_owner', expiresAt = Date.now() + 60_000) {
 
 test('production rejects anonymous notes/API/share and untrusted proxy identity', async () => {
 	assert.equal((await request('/')).status, 303);
-	assert.doesNotMatch(await (await request('/login')).text(), /jellyware\/widget\.js|data-jellyware-app|data-jellyware-inline/);
+	assert.doesNotMatch(await (await request('/login')).text(), /jellyware\/widget\.js|data-jellyware-machine|data-jellyware-inline/);
 	assert.equal((await request('/api/items')).status, 401);
 	assert.equal((await request('/api/items', { headers: { 'X-Amp-Authenticated': 'amp-user=yes, workspace-member=yes', 'X-Amp-User-ID': 'user_owner' } })).status, 401);
 	assert.equal((await request('/share', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"text":"blocked"}' })).status, 401);
@@ -129,9 +130,9 @@ test('signout is POST-only, clears session, rejects cross-origin forms', async (
 });
 
 test('widget capability is checked server-side without leaking OAuth token', async (t) => {
-	const widget = { scriptURL: 'https://ampcode.com/jellyware/widget.js', appID: 'app_test' };
+	const widget = { scriptURL: 'https://ampcode.com/jellyware/widget.js', machineID: 'machine_test' };
 	t.mock.method(globalThis, 'fetch', async (input, init) => {
-		assert.equal(input, 'https://ampcode.com/api/jellyware/context?app=amp/curiosity-collector');
+		assert.equal(String(input), 'https://ampcode.com/api/jellyware/context?box=mrnugget%2Fkiste&deployment=curiosity-collector');
 		assert.equal(init.headers.Authorization, 'Bearer test-token');
 		assert.equal(init.redirect, 'error');
 		return Response.json({ widget });
@@ -140,7 +141,7 @@ test('widget capability is checked server-side without leaking OAuth token', asy
 	assert.equal(response.status, 200);
 	const html = await response.text();
 	assert.match(html, /https:\/\/ampcode.com\/jellyware\/widget.js/);
-	assert.match(html, /app_test/);
+	assert.match(html, /machine_test/);
 	assert.doesNotMatch(html, /test-token|test-client-secret|accessToken/);
 });
 
@@ -152,7 +153,7 @@ test('widget loader enables inline confirmation without app proxy calls', () => 
 	let removed = false;
 	const enabled = [];
 	runInNewContext(effect, {
-		data: { widget: { scriptURL: 'https://ampcode.com/jellyware/widget.js', appID: 'app_test' } },
+		data: { widget: { scriptURL: 'https://ampcode.com/jellyware/widget.js', machineID: 'machine_test' } },
 		$effect: (callback) => { cleanup = callback(); },
 		document: {
 			createElement: (tag) => { assert.equal(tag, 'script'); return { dataset: {}, remove: () => { removed = true; } }; },
@@ -162,7 +163,7 @@ test('widget loader enables inline confirmation without app proxy calls', () => 
 		fetch: () => { assert.fail('Separate-page loader must not call the app proxy'); }
 	});
 	assert.equal(appended.src, 'https://ampcode.com/jellyware/widget.js');
-	assert.equal(appended.dataset.jellywareApp, 'app_test');
+	assert.equal(appended.dataset.jellywareMachine, 'machine_test');
 	assert.equal(appended.dataset.jellywareInline, 'true');
 	assert.equal(appended.async, true);
 	cleanup();
@@ -178,7 +179,7 @@ test('temporary diagnostic and inline proxy routes are removed', async () => {
 });
 
 test('denied, unavailable and malformed widget capability never break notes', async (t) => {
-	for (const result of [null, 401, 503, 'offline', { scriptURL: 'https://evil.example/widget.js', appID: 'app_test' }]) {
+	for (const result of [null, 401, 503, 'offline', { scriptURL: 'https://evil.example/widget.js', machineID: 'machine_test' }]) {
 		const mock = t.mock.method(globalThis, 'fetch', async () => {
 			if (result === 'offline') throw new Error('offline');
 			return typeof result === 'number' ? new Response('', { status: result }) : Response.json({ widget: result });
@@ -186,7 +187,7 @@ test('denied, unavailable and malformed widget capability never break notes', as
 		const response = await request('/', { headers: { cookie: sessionCookie() } });
 		assert.equal(response.status, 200);
 		const html = await response.text();
-		assert.doesNotMatch(html, /app_test|test-token|widget\.js/);
+		assert.doesNotMatch(html, /machine_test|test-token|widget\.js/);
 		mock.mock.restore();
 	}
 });

@@ -7,7 +7,7 @@
 		let disposed = false;
 		const script = document.createElement('script');
 		script.src = data.widget.scriptURL;
-		script.dataset.jellywareApp = data.widget.appID;
+		script.dataset.jellywareMachine = data.widget.machineID;
 		script.dataset.jellywareInline = 'true';
 		script.async = true;
 		script.onload = () => {
