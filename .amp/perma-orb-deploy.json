@@ -1,9 +1,0 @@
-{
-  "targets": {
-    "default": {
-      "on": "mrnugget/big-orber",
-      "name": "curiosity-collector",
-      "branch": "main"
-    }
-  }
-}
