@@ -1,8 +1,8 @@
 {
   "targets": {
     "default": {
-      "on": "mrnugget/gcp-test",
-      "name": "web"
+      "on": "mrnugget/kiste",
+      "name": "curiosity-collector"
     }
   }
 }
