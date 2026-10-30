@@ -20,5 +20,5 @@ test('legacy password preserves only machine sharing when the dedicated token is
 	assert.equal((await request('/')).status, 303);
 	assert.equal((await request('/login', { method: 'POST', headers: { origin: 'http://localhost', 'content-type': 'application/x-www-form-urlencoded' }, body: `password=${password}` })).status, 405);
 	const login = await (await request('/login', { headers })).text();
-	assert.doesNotMatch(login, /widget\.js|Signed in as/);
+	assert.doesNotMatch(login, /Signed in as/);
 });

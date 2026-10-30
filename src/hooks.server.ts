@@ -14,12 +14,10 @@ const PUBLIC = new Set(['/login', '/auth/signin', '/auth/callback', '/auth/signo
 export const handle: Handle = async ({ event, resolve }) => {
 	const { pathname } = event.url;
 	event.locals.user = null;
-	event.locals.accessToken = null;
 	try {
 		const session = await authenticateSession(event.cookies.get(AUTH_COOKIE));
 		if (session) {
 			event.locals.user = session.user;
-			event.locals.accessToken = session.accessToken;
 			if (session.refreshedCookie) event.cookies.set(AUTH_COOKIE, session.refreshedCookie, {
 				path: '/', httpOnly: true, sameSite: 'lax', secure: SECURE_COOKIES, maxAge: SESSION_MAX_AGE_SECONDS
 			});
@@ -29,8 +27,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 	} catch {
 		// Failed refresh must never grant access or expose provider credentials.
 		event.locals.user = null;
-		event.locals.accessToken = null;
-		event.cookies.delete(AUTH_COOKIE, { path: '/', secure: SECURE_COOKIES });
+			event.cookies.delete(AUTH_COOKIE, { path: '/', secure: SECURE_COOKIES });
 	}
 	const isPublic =
 		PUBLIC.has(pathname) ||

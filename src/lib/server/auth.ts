@@ -17,7 +17,7 @@ export interface AuthedUser {
 	email: string | null;
 }
 
-/** Notes access only: this does not confer app-owner/admin or widget permissions. */
+/** Notes access only: this does not confer app-owner/admin permissions. */
 export function canAccessCollector(user: AuthedUser | null): boolean {
 	return user !== null && (env.COLLECTOR_ALLOWED_USER_IDS ?? '').split(',').map((id) => id.trim()).includes(user.id);
 }

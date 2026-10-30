@@ -68,7 +68,7 @@ Register a **server** OAuth client in the owning Amp workspace, after approval:
 
 ```sh
 amp oauth-clients create --type server --workspace amp --name curiosity-collector \
-  --redirect-uri https://curiosity-collector--amp.onamp.dev/auth/callback
+  --redirect-uri https://your.host/auth/callback
 ```
 
 Configure the client ID/secret, exact redirect URI, session secret and allowed Amp
@@ -82,27 +82,12 @@ uses that bypass**, even without configuration. Do not expose that dev server pu
 Migration: shared-password login and old `cc_session` cookies are no longer accepted.
 For the first rollout, leave `COLLECTOR_SHARE_TOKEN` unset and retain the existing
 `COLLECTOR_PASSWORD`: existing Shortcut bearer headers and `/share?key=` links keep
-working, but grant no browser login, notes API access, or widget permission.
+working, but grant no browser login or notes API access.
 Coordinate clients before setting `COLLECTOR_SHARE_TOKEN`: setting it immediately
 disables the old password and all URL-key authentication. Clients must then send
 the new token as a bearer header. Remove `COLLECTOR_PASSWORD` after migration.
 Notes and API responses are not
 cached, and the service worker no longer stores private HTML for offline use.
-
-Amp identity is not app ownership. Deployed apps do not receive the documented
-thread-portal identity headers. Notes allowlists grant no Jellyware widget rights;
-Amp shows the widget only to users with access to the Box.
-
-The root server layout calls `GET https://ampcode.com/api/jellyware/context?box=$AMP_BOX&deployment=$AMP_BOX_DEPLOYMENT`
-(both set in `.amp/box.yaml`) with the server-only OAuth access token. Only an authorized
-`{widget: {scriptURL, machineID}}` response enables the browser's async platform script; null, errors and
-timeouts hide it. Tokens never enter page data. Sending a DOM comment opens an
-Amp-owned confirmation page: sign-in alone does not authorize agent execution.
-
-The perma-orb builds via `.amp/perma-orb.yaml`, runs `node build` with
-`ORIGIN=$AMP_DEPLOYMENT_URL`, and stores SQLite at `/home/user/data/collector.db`,
-outside `/home/user/workspace/app`, so redeploying the checkout preserves data.
-This is not a backup policy; the application has no independent backup/replication.
 
 Verification: `pnpm check` and `pnpm test` (build, OAuth cryptography tests and
 production SvelteKit request tests against an in-memory database). These tests do

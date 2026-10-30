@@ -1,23 +1,19 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { generateKeyPairSync, sign } from 'node:crypto';
-import { readFileSync } from 'node:fs';
-import { runInNewContext } from 'node:vm';
 import { Server } from '../.svelte-kit/output/server/index.js';
 import { manifest } from '../.svelte-kit/output/server/manifest.js';
 import { sealPayload, unsealPayload } from '../src/lib/server/oauth.ts';
 
 const secret = 'local-test-session-secret-not-for-production';
 const origin = 'http://localhost:3000';
-globalThis.fetch = async () => Response.json({ widget: null });
 const server = new Server(manifest);
 await server.init({ env: {
 	NODE_ENV: 'production', DATABASE_PATH: ':memory:',
 	AMP_OAUTH_CLIENT_ID: 'test-client', AMP_OAUTH_CLIENT_SECRET: 'test-client-secret',
 	AMP_OAUTH_REDIRECT_URI: `${origin}/auth/callback`, COLLECTOR_SESSION_SECRET: secret,
 	COLLECTOR_SHARE_TOKEN: 'test-share-token', COLLECTOR_PASSWORD: 'legacy-password',
-	COLLECTOR_ALLOWED_USER_IDS: 'user_owner,user_01K9KJJDPFGCG05B1WFFETGX8E',
-	AMP_BOX: 'mrnugget/kiste', AMP_BOX_DEPLOYMENT: 'curiosity-collector'
+	COLLECTOR_ALLOWED_USER_IDS: 'user_owner,user_01K9KJJDPFGCG05B1WFFETGX8E'
 } });
 
 function request(path, options = {}) {
@@ -31,7 +27,6 @@ function sessionCookie(id = 'user_owner', expiresAt = Date.now() + 60_000) {
 
 test('production rejects anonymous notes/API/share and untrusted proxy identity', async () => {
 	assert.equal((await request('/')).status, 303);
-	assert.doesNotMatch(await (await request('/login')).text(), /jellyware\/widget\.js|data-jellyware-machine|data-jellyware-inline/);
 	assert.equal((await request('/api/items')).status, 401);
 	assert.equal((await request('/api/items', { headers: { 'X-Amp-Authenticated': 'amp-user=yes, workspace-member=yes', 'X-Amp-User-ID': 'user_owner' } })).status, 401);
 	assert.equal((await request('/share', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"text":"blocked"}' })).status, 401);
@@ -129,65 +124,7 @@ test('signout is POST-only, clears session, rejects cross-origin forms', async (
 	assert.equal((await request('/auth/signout', { method: 'POST', headers: { origin: 'https://evil.example', 'content-type': 'application/x-www-form-urlencoded' }, body: '' })).status, 403);
 });
 
-test('widget capability is checked server-side without leaking OAuth token', async (t) => {
-	const widget = { scriptURL: 'https://ampcode.com/jellyware/widget.js', machineID: 'machine_test' };
-	t.mock.method(globalThis, 'fetch', async (input, init) => {
-		assert.equal(String(input), 'https://ampcode.com/api/jellyware/context?box=mrnugget%2Fkiste&deployment=curiosity-collector');
-		assert.equal(init.headers.Authorization, 'Bearer test-token');
-		assert.equal(init.redirect, 'error');
-		return Response.json({ widget });
-	});
-	const response = await request('/', { headers: { cookie: sessionCookie() } });
-	assert.equal(response.status, 200);
-	const html = await response.text();
-	assert.match(html, /https:\/\/ampcode.com\/jellyware\/widget.js/);
-	assert.match(html, /machine_test/);
-	assert.doesNotMatch(html, /test-token|test-client-secret|accessToken/);
-});
-
-test('widget loader enables inline confirmation without app proxy calls', () => {
-	const source = readFileSync(new URL('../src/routes/+layout.svelte', import.meta.url), 'utf8');
-	const effect = source.slice(source.indexOf('$effect('), source.indexOf('</script>'));
-	let cleanup;
-	let appended;
-	let removed = false;
-	const enabled = [];
-	runInNewContext(effect, {
-		data: { widget: { scriptURL: 'https://ampcode.com/jellyware/widget.js', machineID: 'machine_test' } },
-		$effect: (callback) => { cleanup = callback(); },
-		document: {
-			createElement: (tag) => { assert.equal(tag, 'script'); return { dataset: {}, remove: () => { removed = true; } }; },
-			head: { append: (script) => { appended = script; } }
-		},
-		window: { __ampJellyware: { setEnabled: (value) => enabled.push(value) } },
-		fetch: () => { assert.fail('Separate-page loader must not call the app proxy'); }
-	});
-	assert.equal(appended.src, 'https://ampcode.com/jellyware/widget.js');
-	assert.equal(appended.dataset.jellywareMachine, 'machine_test');
-	assert.equal(appended.dataset.jellywareInline, 'true');
-	assert.equal(appended.async, true);
-	cleanup();
-	appended.onload();
-	assert.equal(removed, true);
-	assert.deepEqual(enabled, [false, false]);
-});
-
-test('temporary diagnostic and inline proxy routes are removed', async () => {
+test('temporary diagnostic routes are removed', async () => {
 	const headers = { cookie: sessionCookie() };
 	assert.equal((await request('/__oauth-lifecycle', { headers })).status, 404);
-	assert.equal((await request('/api/jellyware', { headers })).status, 404);
-});
-
-test('denied, unavailable and malformed widget capability never break notes', async (t) => {
-	for (const result of [null, 401, 503, 'offline', { scriptURL: 'https://evil.example/widget.js', machineID: 'machine_test' }]) {
-		const mock = t.mock.method(globalThis, 'fetch', async () => {
-			if (result === 'offline') throw new Error('offline');
-			return typeof result === 'number' ? new Response('', { status: result }) : Response.json({ widget: result });
-		});
-		const response = await request('/', { headers: { cookie: sessionCookie() } });
-		assert.equal(response.status, 200);
-		const html = await response.text();
-		assert.doesNotMatch(html, /machine_test|test-token|widget\.js/);
-		mock.mock.restore();
-	}
 });
