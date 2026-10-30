@@ -4,6 +4,9 @@ import type { OAuthConfig } from './oauth';
 
 export const SESSION_SECRET = env.COLLECTOR_SESSION_SECRET?.trim() ?? '';
 export const LOCAL_AUTH_DISABLED = dev && env.NODE_ENV !== 'production' && !env.AMP_OAUTH_CLIENT_ID;
+/** The Box (`<namespace>/<box>`) and deployment this app runs on; used only for the review widget. */
+export const AMP_BOX = env.AMP_BOX?.trim() ?? '';
+export const AMP_BOX_DEPLOYMENT = env.AMP_BOX_DEPLOYMENT?.trim() ?? '';
 export const SECURE_COOKIES = !env.AMP_OAUTH_REDIRECT_URI?.startsWith('http://');
 
 export function oauthConfigurationError(): string | null {

@@ -1,0 +1,8 @@
+{
+  "targets": {
+    "default": {
+      "on": "mrnugget/kiste",
+      "name": "curiosity-collector"
+    }
+  }
+}
